@@ -14,6 +14,102 @@ st.set_page_config(page_title="TrustSeg", layout="wide")
 
 st.markdown("""
 <style>
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(200, 100, 150, 0.4); }
+    50% { box-shadow: 0 0 20px 6px rgba(200, 100, 150, 0.2); }
+}
+
+.animated-title {
+    background: linear-gradient(270deg, #ff6b9d, #c44dff, #6b9dff, #ff6b9d);
+    background-size: 400% 400%;
+    animation: gradientShift 6s ease infinite;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 2.8rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+}
+
+.subtitle {
+    color: #888;
+    font-size: 1.1rem;
+    animation: fadeInUp 1s ease forwards;
+    margin-bottom: 2rem;
+}
+
+.info-card {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 1px solid rgba(200, 100, 150, 0.3);
+    border-radius: 16px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+    animation: fadeInUp 0.8s ease forwards;
+}
+
+.info-card h3 {
+    color: #ff6b9d;
+    margin-bottom: 0.8rem;
+    font-size: 1.1rem;
+}
+
+.info-card ul {
+    color: #ccc;
+    line-height: 2;
+    padding-left: 1.2rem;
+}
+
+.result-container {
+    animation: fadeInUp 0.6s ease forwards;
+}
+
+.uncertainty-badge-high {
+    background: linear-gradient(135deg, #ff4444, #cc0000);
+    color: white;
+    padding: 0.3rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: inline-block;
+    animation: pulse 2s infinite;
+}
+
+.uncertainty-badge-medium {
+    background: linear-gradient(135deg, #ffaa00, #cc7700);
+    color: white;
+    padding: 0.3rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: inline-block;
+}
+
+.uncertainty-badge-low {
+    background: linear-gradient(135deg, #00cc66, #009944);
+    color: white;
+    padding: 0.3rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: inline-block;
+}
+
 div.stButton > button {
     background: radial-gradient(150% 180% at 11% 140%, #000 37%, #08012c 61%, #4e1e40 78%, #70464e 89%, #88394c 100%);
     color: white;
@@ -35,23 +131,54 @@ div.stButton > button:hover {
 div.stButton > button:active {
     transform: scale(0.98);
 }
+
+.stTabs [data-baseweb="tab"] {
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 0.5rem 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.stTabs [aria-selected="true"] {
+    color: #ff6b9d !important;
+    border-bottom: 2px solid #ff6b9d !important;
+}
+
+section[data-testid="stFileUploadDropzone"] {
+    border: 2px dashed rgba(200, 100, 150, 0.4) !important;
+    border-radius: 16px !important;
+    transition: all 0.3s ease;
+}
+
+section[data-testid="stFileUploadDropzone"]:hover {
+    border-color: rgba(200, 100, 150, 0.8) !important;
+    background: rgba(200, 100, 150, 0.05) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("TrustSeg: Uncertainty-Aware Skin Lesion Segmentation")
+st.markdown('<div class="animated-title">TrustSeg</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Uncertainty-Aware Skin Lesion Segmentation using Monte Carlo Dropout</div>', unsafe_allow_html=True)
 
 st.markdown("""
-### What this tool does
-- Segments skin lesions using a deep learning model (U-Net)
-- Estimates prediction uncertainty using Monte Carlo Dropout
-- Highlights unreliable predictions for review
-
-### How to interpret results
-- Low uncertainty → high confidence
-- High uncertainty → model is unsure
-""")
-
-st.markdown("Upload a dermoscopic image to see the predicted segmentation mask and uncertainty map.")
+<div class="info-card">
+    <h3>What this tool does</h3>
+    <ul>
+        <li>Segments skin lesions using a lightweight U-Net deep learning model</li>
+        <li>Estimates prediction uncertainty using Monte Carlo Dropout</li>
+        <li>Highlights unreliable predictions for clinician review</li>
+        <li>Ranks unlabeled images by uncertainty for efficient annotation</li>
+    </ul>
+</div>
+<div class="info-card">
+    <h3>How to interpret results</h3>
+    <ul>
+        <li>Low uncertainty — model is confident, prediction is reliable</li>
+        <li>Medium uncertainty — moderate confidence, review recommended</li>
+        <li>High uncertainty — model is unsure, manual review required</li>
+    </ul>
+</div>
+""", unsafe_allow_html=True)
 
 @st.cache_resource
 def load_model():
@@ -92,6 +219,8 @@ with tab1:
                 tensor = preprocess(image)
                 mean_pred, uncertainty = mc_predict(model, tensor, n_passes=20, device=device)
 
+            st.markdown('<div class="result-container">', unsafe_allow_html=True)
+
             col1, col2, col3, col4 = st.columns(4)
 
             with col1:
@@ -121,47 +250,58 @@ with tab1:
                 overlay = (0.6 * image_resized + 0.4 * mask_rgb).astype(np.uint8)
                 st.image(overlay, use_container_width=True)
 
+            st.markdown('</div>', unsafe_allow_html=True)
+
             avg_uncertainty = uncertainty.mean()
 
             st.divider()
-            col5, col6 = st.columns(2)
-
-            with col5:
-                st.metric("Average Uncertainty", f"{avg_uncertainty:.6f}")
-
-            with col6:
-                confidence = "High" if avg_uncertainty < 0.01 else "Medium" if avg_uncertainty < 0.05 else "Low"
-                st.metric("Model Confidence", confidence)
-
-            if avg_uncertainty >= 0.03:
-                st.warning("⚠️ Low confidence prediction — recommend manual review by a clinician.")
 
             if avg_uncertainty < 0.01:
-                st.success("✅ Model is very confident in this prediction.")
-            elif avg_uncertainty < 0.03:
-                st.info("ℹ️ Moderate confidence. Review recommended.")
+                badge = '<span class="uncertainty-badge-low">High Confidence</span>'
+            elif avg_uncertainty < 0.05:
+                badge = '<span class="uncertainty-badge-medium">Medium Confidence</span>'
             else:
-                st.error("❌ Low confidence. Prediction may be unreliable.")
+                badge = '<span class="uncertainty-badge-high">Low Confidence</span>'
+
+            st.markdown(f"**Model Confidence:** {badge} &nbsp;&nbsp; **Average Uncertainty:** `{avg_uncertainty:.6f}`", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            if avg_uncertainty >= 0.03:
+                st.warning("Low confidence prediction — recommend manual review by a clinician.")
+
+            if avg_uncertainty < 0.01:
+                st.success("Model is very confident in this prediction.")
+            elif avg_uncertainty < 0.03:
+                st.info("Moderate confidence. Review recommended.")
+            else:
+                st.error("Low confidence. Prediction may be unreliable.")
 
             st.divider()
             st.subheader("Pixel-Level Uncertainty Distribution")
-            st.markdown("This histogram shows how uncertainty is distributed across every pixel in the image. A spike on the left means most pixels are confident. A long right tail means many pixels are uncertain.")
+            st.markdown("This histogram shows how uncertainty is distributed across every pixel. A spike on the left means most pixels are confident. A long right tail means many pixels are uncertain.")
 
             fig2, ax2 = plt.subplots(figsize=(8, 3))
+            fig2.patch.set_facecolor('#0e1117')
+            ax2.set_facecolor('#0e1117')
             uncertainty_flat = uncertainty.flatten()
-            ax2.hist(uncertainty_flat, bins=80, color='steelblue', alpha=0.8, edgecolor='none')
-            ax2.axvline(avg_uncertainty, color='red', linestyle='--', linewidth=1.5, label=f'Mean: {avg_uncertainty:.4f}')
+            ax2.hist(uncertainty_flat, bins=80, color='#ff6b9d', alpha=0.8, edgecolor='none')
+            ax2.axvline(avg_uncertainty, color='white', linestyle='--', linewidth=1.5, label=f'Mean: {avg_uncertainty:.4f}')
             ax2.axvline(0.03, color='orange', linestyle='--', linewidth=1.5, label='Review threshold (0.03)')
-            ax2.set_xlabel("Uncertainty (Variance)")
-            ax2.set_ylabel("Pixel Count")
-            ax2.set_title("Distribution of Pixel-Level Uncertainty")
-            ax2.legend()
+            ax2.set_xlabel("Uncertainty (Variance)", color='white')
+            ax2.set_ylabel("Pixel Count", color='white')
+            ax2.set_title("Distribution of Pixel-Level Uncertainty", color='white')
+            ax2.tick_params(colors='white')
+            ax2.spines['bottom'].set_color('#444')
+            ax2.spines['left'].set_color('#444')
+            ax2.spines['top'].set_visible(False)
+            ax2.spines['right'].set_visible(False)
+            ax2.legend(facecolor='#1a1a2e', labelcolor='white')
             st.pyplot(fig2)
             plt.close()
 
             st.divider()
             st.subheader("Model Performance Analysis")
-            st.markdown("The plot below shows uncertainty vs Dice score across **800 training images**. Higher uncertainty reliably predicts lower segmentation accuracy — confirming that MC Dropout uncertainty is a meaningful signal.")
+            st.markdown("Uncertainty vs Dice score across **800 training images**. Higher uncertainty predicts lower segmentation accuracy.")
 
             if os.path.exists("uncertainty_vs_dice.png"):
                 st.image("uncertainty_vs_dice.png", use_container_width=True, caption="Negative correlation between MC Dropout uncertainty and Dice coefficient (n=800)")
@@ -177,7 +317,7 @@ with tab2:
     st.markdown("""
     Upload multiple unlabeled images. The model ranks them by uncertainty.
     Label the most uncertain ones first to improve performance efficiently.
-    
+
     This implements **maximum entropy sampling**, a core strategy in active learning research.
     """)
 
@@ -195,12 +335,11 @@ with tab2:
                 images = [(f.name, Image.open(f)) for f in uploaded_files]
                 ranked = rank_by_uncertainty(model, images, device, n_passes=10)
 
-            st.success(f"✅ Ranked {len(ranked)} images. Label the top ones first!")
-
+            st.success(f"Ranked {len(ranked)} images. Label the top ones first!")
             st.divider()
 
             for i, result in enumerate(ranked):
-                priority = "🔴 High priority" if result['uncertainty'] > 0.03 else "🟡 Medium priority" if result['uncertainty'] > 0.01 else "🟢 Low priority"
+                priority = "High priority" if result['uncertainty'] > 0.03 else "Medium priority" if result['uncertainty'] > 0.01 else "Low priority"
 
                 with st.expander(f"#{i+1} — {result['name']} | Uncertainty: {result['uncertainty']:.6f} | {priority}"):
                     c1, c2, c3 = st.columns(3)
@@ -217,6 +356,8 @@ with tab2:
                     with c3:
                         st.caption("Uncertainty map")
                         fig3, ax3 = plt.subplots()
+                        fig3.patch.set_facecolor('#0e1117')
+                        ax3.set_facecolor('#0e1117')
                         ax3.imshow(result['uncertainty_map'], cmap='RdYlGn_r')
                         ax3.axis('off')
                         st.pyplot(fig3)
@@ -225,14 +366,21 @@ with tab2:
             st.divider()
             st.subheader("Uncertainty Rankings Summary")
             fig4, ax4 = plt.subplots(figsize=(8, 3))
+            fig4.patch.set_facecolor('#0e1117')
+            ax4.set_facecolor('#0e1117')
             names = [r['name'][:15] for r in ranked]
             uncertainties = [r['uncertainty'] for r in ranked]
-            colors = ['red' if u > 0.03 else 'orange' if u > 0.01 else 'steelblue' for u in uncertainties]
+            colors = ['#ff4444' if u > 0.03 else '#ffaa00' if u > 0.01 else '#00cc66' for u in uncertainties]
             ax4.barh(names, uncertainties, color=colors)
-            ax4.axvline(0.03, color='red', linestyle='--', linewidth=1, label='Review threshold')
-            ax4.set_xlabel("Average Uncertainty")
-            ax4.set_title("Images Ranked by Uncertainty (label red ones first)")
-            ax4.legend()
+            ax4.axvline(0.03, color='white', linestyle='--', linewidth=1, label='Review threshold')
+            ax4.set_xlabel("Average Uncertainty", color='white')
+            ax4.set_title("Images Ranked by Uncertainty", color='white')
+            ax4.tick_params(colors='white')
+            ax4.spines['bottom'].set_color('#444')
+            ax4.spines['left'].set_color('#444')
+            ax4.spines['top'].set_visible(False)
+            ax4.spines['right'].set_visible(False)
+            ax4.legend(facecolor='#1a1a2e', labelcolor='white')
             plt.tight_layout()
             st.pyplot(fig4)
             plt.close()
