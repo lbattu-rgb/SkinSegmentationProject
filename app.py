@@ -13,6 +13,7 @@ from src.active_learning import rank_by_uncertainty
 st.set_page_config(page_title="TrustSeg", layout="wide")
 
 st.title("TrustSeg: Uncertainty-Aware Skin Lesion Segmentation")
+
 st.markdown("""
 ### What this tool does
 - Segments skin lesions using a deep learning model (U-Net)
@@ -23,6 +24,7 @@ st.markdown("""
 - Low uncertainty → high confidence
 - High uncertainty → model is unsure
 """)
+
 st.markdown("Upload a dermoscopic image to see the predicted segmentation mask and uncertainty map.")
 
 @st.cache_resource
@@ -44,12 +46,19 @@ def preprocess(image):
 
 tab1, tab2 = st.tabs(["Segmentation Demo", "Active Learning"])
 
+# ---------------------- TAB 1 ----------------------
 with tab1:
     uploaded_file = st.file_uploader("Choose a skin lesion image", type=["jpg", "jpeg", "png"])
+    use_sample = st.button("Try a sample image")
 
-    if uploaded_file:
+    if use_sample:
+        image = Image.open("sample.png")
+    elif uploaded_file:
         image = Image.open(uploaded_file)
+    else:
+        image = None
 
+    if image is not None:
         try:
             model, device = load_model()
 
@@ -90,25 +99,29 @@ with tab1:
 
             st.divider()
             col5, col6 = st.columns(2)
+
             with col5:
                 st.metric("Average Uncertainty", f"{avg_uncertainty:.6f}")
+
             with col6:
                 confidence = "High" if avg_uncertainty < 0.01 else "Medium" if avg_uncertainty < 0.05 else "Low"
                 st.metric("Model Confidence", confidence)
 
+            # Warning
             if avg_uncertainty >= 0.03:
                 st.warning("⚠️ Low confidence prediction — recommend manual review by a clinician.")
-                # Clear interpretation for user
+
+            # Clear interpretation
             if avg_uncertainty < 0.01:
                 st.success("Model is very confident in this prediction.")
             elif avg_uncertainty < 0.03:
                 st.info("Moderate confidence. Review recommended.")
             else:
                 st.error("Low confidence. Prediction may be unreliable.")
-    
+
             st.divider()
             st.subheader("Pixel-Level Uncertainty Distribution")
-            st.markdown("This histogram shows how uncertainty is distributed across every pixel in the image. A spike on the left means most pixels are confident. A long right tail means many pixels are uncertain.")
+            st.markdown("This histogram shows how uncertainty is distributed across every pixel in the image.")
 
             fig2, ax2 = plt.subplots(figsize=(8, 3))
             uncertainty_flat = uncertainty.flatten()
@@ -124,27 +137,26 @@ with tab1:
 
             st.divider()
             st.subheader("Model Performance Analysis")
-            st.markdown("The plot below shows uncertainty vs Dice score across **800 training images**. Higher uncertainty reliably predicts lower segmentation accuracy — confirming that MC Dropout uncertainty is a meaningful signal.")
+            st.markdown("The plot below shows uncertainty vs Dice score across training images.")
+
             if os.path.exists("uncertainty_vs_dice.png"):
-                st.image("uncertainty_vs_dice.png", use_container_width=True, caption="Negative correlation between MC Dropout uncertainty and Dice coefficient (n=800)")
+                st.image("uncertainty_vs_dice.png", use_container_width=True)
             else:
-                st.info("Run src/evaluate.py to generate the performance analysis plot.")
+                st.info("Run src/evaluate.py to generate this plot.")
 
         except FileNotFoundError:
-            st.warning("No trained model found. Please train the model first by running src/train.py")
+            st.warning("No trained model found. Please train the model first.")
 
+# ---------------------- TAB 2 ----------------------
 with tab2:
     st.subheader("Uncertainty-Guided Active Learning")
     st.markdown("""
-    Upload multiple unlabeled images. The model will rank them by uncertainty — 
-    the most uncertain images are the most informative to label next, 
-    allowing you to improve the model with fewer annotations.
-    
-    This implements **maximum entropy sampling**, a core strategy in active learning research.
+    Upload multiple unlabeled images. The model ranks them by uncertainty.
+    Label the most uncertain ones first to improve performance efficiently.
     """)
 
     uploaded_files = st.file_uploader(
-        "Upload unlabeled images to rank by uncertainty",
+        "Upload unlabeled images",
         type=["jpg", "jpeg", "png"],
         accept_multiple_files=True
     )
@@ -153,51 +165,29 @@ with tab2:
         try:
             model, device = load_model()
 
-            with st.spinner(f"Ranking {len(uploaded_files)} images by uncertainty..."):
+            with st.spinner(f"Ranking {len(uploaded_files)} images..."):
                 images = [(f.name, Image.open(f)) for f in uploaded_files]
                 ranked = rank_by_uncertainty(model, images, device, n_passes=10)
 
-            st.success(f"Ranked {len(ranked)} images. Label the top ones first!")
-
-            st.divider()
+            st.success(f"Ranked {len(ranked)} images")
 
             for i, result in enumerate(ranked):
-                priority = "🔴 High priority" if result['uncertainty'] > 0.03 else "🟡 Medium priority" if result['uncertainty'] > 0.01 else "🟢 Low priority"
-
-                with st.expander(f"#{i+1} — {result['name']} | Uncertainty: {result['uncertainty']:.6f} | {priority}"):
+                with st.expander(f"{i+1}. {result['name']} | {result['uncertainty']:.5f}"):
                     c1, c2, c3 = st.columns(3)
 
                     with c1:
-                        st.caption("Original image")
                         st.image(result['image'], use_container_width=True)
 
                     with c2:
-                        st.caption("Predicted mask")
                         mask_display = (result['mean_pred'] > 0.5).astype(np.uint8) * 255
-                        st.image(mask_display, use_container_width=True, clamp=True)
+                        st.image(mask_display, use_container_width=True)
 
                     with c3:
-                        st.caption("Uncertainty map")
                         fig3, ax3 = plt.subplots()
                         ax3.imshow(result['uncertainty_map'], cmap='RdYlGn_r')
                         ax3.axis('off')
                         st.pyplot(fig3)
                         plt.close()
 
-            st.divider()
-            st.subheader("Uncertainty Rankings Summary")
-            fig4, ax4 = plt.subplots(figsize=(8, 3))
-            names = [r['name'][:15] for r in ranked]
-            uncertainties = [r['uncertainty'] for r in ranked]
-            colors = ['red' if u > 0.03 else 'orange' if u > 0.01 else 'steelblue' for u in uncertainties]
-            ax4.barh(names, uncertainties, color=colors)
-            ax4.axvline(0.03, color='red', linestyle='--', linewidth=1, label='Review threshold')
-            ax4.set_xlabel("Average Uncertainty")
-            ax4.set_title("Images Ranked by Uncertainty (label red ones first)")
-            ax4.legend()
-            plt.tight_layout()
-            st.pyplot(fig4)
-            plt.close()
-
         except FileNotFoundError:
-            st.warning("No trained model found. Please train the model first.")
+            st.warning("No trained model found.")
