@@ -31,9 +31,10 @@ def train():
 
     model = UNetMCDropout(dropout_p=0.3).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5)   
 
     best_val_loss = float('inf')
-    epochs = 20
+    epochs = 50
 
     for epoch in range(epochs):
         model.train()
@@ -59,6 +60,7 @@ def train():
         train_loss /= len(train_loader)
         val_loss /= len(val_loader)
         print(f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+        scheduler.step(val_loss)
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss

@@ -46,12 +46,12 @@ if uploaded_file:
 
         with col1:
             st.subheader("Original Image")
-            st.image(image, use_column_width=True)
+            st.image(image, use_container_width=True)
 
         with col2:
             st.subheader("Predicted Mask")
             mask_display = (mean_pred > 0.5).astype(np.uint8) * 255
-            st.image(mask_display, use_column_width=True, clamp=True)
+            st.image(mask_display, use_container_width=True, clamp=True)
 
         with col3:
             st.subheader("Uncertainty Map")
