@@ -87,7 +87,7 @@ model/best_model.pth
 streamlit run app.py
 
 Then open:
-[http://localhost:8501](https://skin-lesion-app-likhitha-battu.streamlit.app/)
+https://skin-lesion-app-likhitha-battu.streamlit.app/
 
 You can upload an image and view:
 
