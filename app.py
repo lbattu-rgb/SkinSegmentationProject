@@ -225,7 +225,8 @@ with tab1:
 
             with col1:
                 st.subheader("Original Image")
-                st.image(image, use_container_width=True)
+                image_display = image.convert("RGB").resize((256, 256))
+                st.image(image_display, use_container_width=True)
 
             with col2:
                 st.subheader("Predicted Mask")
@@ -341,51 +342,62 @@ with tab2:
             for i, result in enumerate(ranked):
                 u = result['uncertainty']
                 if u > 0.03:
-                    border_color = "rgba(255, 68, 68, 0.6)"
-                    bg_color = "rgba(255, 68, 68, 0.07)"
+                    border_color = "rgba(255, 68, 68, 0.7)"
+                    bg_color = "rgba(255, 68, 68, 0.08)"
                     priority = "High priority"
+                    dot_color = "#ff4444"
                 elif u > 0.01:
-                    border_color = "rgba(255, 170, 0, 0.6)"
-                    bg_color = "rgba(255, 170, 0, 0.07)"
+                    border_color = "rgba(255, 170, 0, 0.7)"
+                    bg_color = "rgba(255, 170, 0, 0.08)"
                     priority = "Medium priority"
+                    dot_color = "#ffaa00"
                 else:
-                    border_color = "rgba(0, 204, 102, 0.6)"
-                    bg_color = "rgba(0, 204, 102, 0.07)"
+                    border_color = "rgba(0, 204, 102, 0.7)"
+                    bg_color = "rgba(0, 204, 102, 0.08)"
                     priority = "Low priority"
+                    dot_color = "#00cc66"
 
-                with st.expander(f"#{i+1} — {result['name']} | Uncertainty: {result['uncertainty']:.6f} | {priority}"):
-                    st.markdown(f"""
-                    <style>
-                    div[data-testid="stExpander"]:nth-of-type({i+1}) {{
-                        border: 1px solid {border_color} !important;
-                        background: {bg_color} !important;
-                        border-radius: 12px !important;
-                    }}
-                    </style>
-                    """, unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style="
+                    border: 1px solid {border_color};
+                    background: {bg_color};
+                    border-radius: 12px;
+                    padding: 0.8rem 1.2rem;
+                    margin-bottom: 10px;
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                ">
+                    <div style="width:12px; height:12px; border-radius:50%; background:{dot_color}; flex-shrink:0;"></div>
+                    <span style="font-weight:600;">#{i+1} — {result['name']}</span>
+                    <span style="color:#aaa; font-size:0.9rem;">Uncertainty: {result['uncertainty']:.6f}</span>
+                    <span style="margin-left:auto; font-size:0.85rem; color:{dot_color}; font-weight:600;">{priority}</span>
+                </div>
+                """, unsafe_allow_html=True)
 
-                    c1, c2, c3 = st.columns(3)
+                c1, c2, c3 = st.columns(3)
 
-                    with c1:
-                        st.caption("Original image")
-                        st.image(result['image'], use_container_width=True)
+                with c1:
+                    st.caption("Original image")
+                    st.image(result['image'], use_container_width=True)
 
-                    with c2:
-                        st.caption("Predicted mask")
-                        mask_display = (result['mean_pred'] > 0.5).astype(np.uint8) * 255
-                        st.image(mask_display, use_container_width=True, clamp=True)
+                with c2:
+                    st.caption("Predicted mask")
+                    mask_display = (result['mean_pred'] > 0.5).astype(np.uint8) * 255
+                    st.image(mask_display, use_container_width=True, clamp=True)
 
-                    with c3:
-                        st.caption("Uncertainty map")
-                        fig3, ax3 = plt.subplots()
-                        fig3.patch.set_facecolor('#0e1117')
-                        ax3.set_facecolor('#0e1117')
-                        ax3.imshow(result['uncertainty_map'], cmap='RdYlGn_r')
-                        ax3.axis('off')
-                        st.pyplot(fig3)
-                        plt.close()
+                with c3:
+                    st.caption("Uncertainty map")
+                    fig3, ax3 = plt.subplots()
+                    fig3.patch.set_facecolor('#0e1117')
+                    ax3.set_facecolor('#0e1117')
+                    ax3.imshow(result['uncertainty_map'], cmap='RdYlGn_r')
+                    ax3.axis('off')
+                    st.pyplot(fig3)
+                    plt.close()
 
-            st.divider()
+                st.divider()
+
             st.subheader("Uncertainty Rankings Summary")
             fig4, ax4 = plt.subplots(figsize=(8, 3))
             fig4.patch.set_facecolor('#0e1117')
