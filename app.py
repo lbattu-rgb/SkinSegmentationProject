@@ -9,6 +9,7 @@ from albumentations.pytorch import ToTensorV2
 from src.model import UNetMCDropout
 from src.uncertainty import mc_predict
 from src.active_learning import rank_by_uncertainty
+from src.concepts import analyze_prediction_concepts
 
 st.set_page_config(page_title="TrustSeg", layout="wide")
 
@@ -154,11 +155,87 @@ section[data-testid="stFileUploadDropzone"]:hover {
     border-color: rgba(200, 100, 150, 0.8) !important;
     background: rgba(200, 100, 150, 0.05) !important;
 }
+
+.concept-chip {
+    display: inline-block;
+    background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+    border: 1px solid #86efac;
+    color: #14532d;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.concept-panel {
+    background: linear-gradient(135deg, #0f172a, #172554 60%, #1e293b 100%);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    box-shadow: 0 18px 40px rgba(11, 14, 28, 0.18);
+    border-radius: 20px;
+    padding: 1.25rem 1.35rem;
+    margin-top: 0.75rem;
+}
+
+.concept-panel p {
+    color: #eef2ff;
+    margin: 0;
+    line-height: 1.65;
+}
+
+.concept-panel p + p {
+    margin-top: 0.8rem;
+}
+
+.concept-panel strong {
+    color: #bfdbfe;
+}
+
+.concept-intro {
+    background: linear-gradient(135deg, #eff6ff, #e0f2fe);
+    border: 1px solid rgba(96, 165, 250, 0.2);
+    border-radius: 16px;
+    padding: 0.95rem 1rem;
+    color: #1e3a8a;
+    margin-bottom: 0.9rem;
+}
+
+.concept-metric {
+    background: linear-gradient(180deg, rgba(248, 250, 255, 0.98), rgba(239, 246, 255, 0.96));
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 16px;
+    padding: 0.95rem 1rem;
+    margin-bottom: 0.8rem;
+    box-shadow: 0 10px 24px rgba(148, 163, 184, 0.08);
+}
+
+.concept-metric-label {
+    color: #64748b;
+    font-size: 0.84rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.2rem;
+}
+
+.concept-metric-value {
+    color: #0f172a;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.concept-score-label {
+    margin-bottom: 0.2rem;
+    color: #1e293b;
+    font-size: 0.96rem;
+    font-weight: 600;
+}
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="animated-title">TrustSeg</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Uncertainty-Aware Skin Lesion Segmentation using Monte Carlo Dropout</div>', unsafe_allow_html=True)
+st.caption("Build: concept explanations enabled")
 
 st.markdown("""
 <div class="info-card">
@@ -218,6 +295,7 @@ with tab1:
             with st.spinner("Running 20 stochastic forward passes..."):
                 tensor = preprocess(image)
                 mean_pred, uncertainty = mc_predict(model, tensor, n_passes=20, device=device)
+                concept_report = analyze_prediction_concepts(image, mean_pred, uncertainty)
 
             st.markdown('<div class="result-container">', unsafe_allow_html=True)
 
@@ -276,6 +354,62 @@ with tab1:
                 st.info("Moderate confidence. Review recommended.")
             else:
                 st.error("Low confidence. Prediction may be unreliable.")
+
+            st.divider()
+            st.subheader("Post-hoc Visual Concepts")
+            st.markdown(
+                """
+                <div class="concept-intro">
+                    This panel turns raw uncertainty into human-readable visual cues, so you can quickly see what likely made the prediction harder.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"""
+                <div class="concept-panel">
+                    <p><strong>Region-aware trust:</strong> {concept_report['summary']}</p>
+                    <p><strong>Why the model may be uncertain:</strong> {concept_report['explanation']}</p>
+                    <p><strong>What this means:</strong> {concept_report['implication']}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            if concept_report["active_concepts"]:
+                st.markdown(
+                    "".join(
+                        f'<span class="concept-chip">{concept}</span>'
+                        for concept in concept_report["active_concepts"]
+                    ),
+                    unsafe_allow_html=True,
+                )
+
+            concept_col1, concept_col2 = st.columns(2)
+            with concept_col1:
+                st.caption("Top concept scores")
+                for concept, score in concept_report["concept_scores"][:5]:
+                    st.markdown(f'<div class="concept-score-label">{concept} ({score:.2f})</div>', unsafe_allow_html=True)
+                    st.progress(min(float(score), 1.0))
+            with concept_col2:
+                metrics = concept_report["metrics"]
+                st.caption("Diagnostic cues")
+                metric_cards = [
+                    ("Boundary contrast", f"{metrics['boundary_contrast']:.3f}"),
+                    ("Edge strength", f"{metrics['boundary_edge_strength']:.3f}"),
+                    ("Outer texture", f"{metrics['outer_texture']:.3f}"),
+                    ("Perimeter uncertainty", f"{metrics['perimeter_uncertainty']:.4f}"),
+                ]
+                for label, value in metric_cards:
+                    st.markdown(
+                        f"""
+                        <div class="concept-metric">
+                            <div class="concept-metric-label">{label}</div>
+                            <div class="concept-metric-value">{value}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
             st.divider()
             st.subheader("Pixel-Level Uncertainty Distribution")
